@@ -92,9 +92,16 @@ class NimbusApp(rumps.App):
         self.item_pct = rumps.MenuItem("Show percentage in menu bar",
                                        callback=self.toggle_percentage)
         self.item_pct.state = bool(settings.get("show_percentage", True))
+        self.item_notify = rumps.MenuItem("Notify when usage resets",
+                                          callback=self._make_toggle("notify_on_reset"))
+        self.item_notify.state = bool(settings.get("notify_on_reset", True))
+        self.item_anim = rumps.MenuItem("Reset animation (recharge sweep)",
+                                        callback=self._make_toggle("reset_animation"))
+        self.item_anim.state = bool(settings.get("reset_animation", True))
         self.menu = [self.item_5h, self.item_7d, self.item_src, None,
                      rumps.MenuItem("Refresh now", callback=lambda _: self.refresh()),
-                     self.item_keeper, self.item_widget, self.item_pct, None]
+                     self.item_keeper, self.item_widget, self.item_pct,
+                     self.item_notify, self.item_anim, None]
 
         interval = 3 if debug else POLL_ACTIVE
         self.timer = rumps.Timer(lambda _: self.refresh(), interval)
@@ -184,12 +191,49 @@ class NimbusApp(rumps.App):
         if self.detector.check(snap):
             self.on_reset()
 
+    def _make_toggle(self, key: str):
+        def handler(item):
+            settings = config.load_settings()
+            settings[key] = not settings.get(key, True)
+            config.save_settings(settings)
+            item.state = settings[key]
+        return handler
+
     # -- reset event (P3 + P4) -------------------------------------------
     def on_reset(self):
-        notify.send(notify.RESET_MESSAGE)
+        settings = config.load_settings()
+        if settings.get("notify_on_reset", True):
+            notify.send(notify.RESET_MESSAGE)
+        if settings.get("reset_animation", True):
+            self._start_reset_animation()
         self.keeper_pings_this_reset = 0
-        if config.load_settings().get("keeper_enabled") and not self.debug:
+        if settings.get("keeper_enabled") and not self.debug:
             self.keeper_ping()
+
+    # -- recharge sweep: the cloud visibly refills from empty to current --
+    def _start_reset_animation(self):
+        self._sweep_step = 0
+        self._sweep_timer = rumps.Timer(self._sweep_frame, 0.12)
+        self._sweep_timer.start()
+
+    def _sweep_frame(self, timer):
+        steps = 24
+        self._sweep_step += 1
+        if self._sweep_step > steps:
+            timer.stop()
+            self._render()  # settle on the real value
+            return
+        target = self.remaining if self.remaining is not None else 100.0
+        value = target * (self._sweep_step / steps)
+        img = cloud_image(ICON_SIZE, value, "full")
+        img.setTemplate_(False)
+        self._icon_nsimage = img
+        try:
+            self._nsapp.setStatusBarIcon()
+        except AttributeError:
+            pass
+        if self.widget is not None:
+            self.widget.update(value, "full", "recharged ⚡", animate=False)
 
     def keeper_ping(self):
         if self.keeper_pings_this_reset >= 2:  # initial + one retry, never more (G3)

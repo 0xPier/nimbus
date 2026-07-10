@@ -29,6 +29,8 @@ DEFAULTS = {
     "widget_size": None,  # [w, h] remembered resize
     "show_percentage": True,  # % text next to the menu bar cloud
     "first_run_done": False,  # wizard shown once
+    "notify_on_reset": True,  # macOS notification at each window reset
+    "reset_animation": True,  # cloud "recharge sweep" animation at reset
 }
 
 
