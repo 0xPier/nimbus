@@ -17,13 +17,14 @@ Rules: read this file at the start of every session. Update it **only after a do
 
 ## Open owner decisions (park here, don't guess — Pier decides)
 
-4. OAuth token refresh: the Claude Code Keychain token is expired. Should Nimbus (a) rely on Pier refreshing it by using claude normally [recommended — keeps Nimbus strictly read-only per G2], or (b) refresh tokens itself with the refreshToken [writes to Claude Code's Keychain item; refresh-token rotation could break the CLI login], or (c) use the pasted sessionKey cookie instead?
+*(none currently open)*
 
 ## Decided by Pier (2026-07-10)
 
 1. **Data source: both** — session-key endpoint primary, local JSONL fallback.
 2. **Keeper: haiku model.** Schedule anchor is **read from the actual observed reset time**, with a settings field letting the user override/input it manually.
 3. **Discharged cloud shows both** the 5h window and the 7-day cap.
+4. **OAuth refresh: Pier refreshes it himself** by using claude normally — Nimbus stays strictly read-only (G2), never touches Claude Code's Keychain item.
 
 ## Session log
 
