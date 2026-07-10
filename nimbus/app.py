@@ -86,9 +86,12 @@ class NimbusApp(rumps.App):
         self.item_widget = rumps.MenuItem("Show desktop cloud (pet)",
                                           callback=self.toggle_widget)
         self.item_widget.state = bool(settings.get("widget_shown"))
+        self.item_pct = rumps.MenuItem("Show percentage in menu bar",
+                                       callback=self.toggle_percentage)
+        self.item_pct.state = bool(settings.get("show_percentage", True))
         self.menu = [self.item_5h, self.item_7d, self.item_src, None,
                      rumps.MenuItem("Refresh now", callback=lambda _: self.refresh()),
-                     self.item_keeper, self.item_widget, None]
+                     self.item_keeper, self.item_widget, self.item_pct, None]
 
         interval = 3 if debug else POLL_ACTIVE
         self.timer = rumps.Timer(lambda _: self.refresh(), interval)
@@ -98,6 +101,14 @@ class NimbusApp(rumps.App):
         self.refresh()
         if settings.get("widget_shown"):
             self._show_widget()
+        if not debug:
+            self.wizard_timer = rumps.Timer(self._run_wizard_once, 1.5)
+            self.wizard_timer.start()
+
+    def _run_wizard_once(self, timer):
+        timer.stop()
+        from .wizard import run_if_first_launch
+        run_if_first_launch(self)
 
     # -- rendering ---------------------------------------------------------
     def _render(self):
@@ -108,7 +119,9 @@ class NimbusApp(rumps.App):
             self._nsapp.setStatusBarIcon()
         except AttributeError:
             pass  # before run() — initializeStatusBar picks it up
-        self.title = f" {self.remaining:.0f}%" if self.remaining is not None else ""
+        show_pct = config.load_settings().get("show_percentage", True)
+        self.title = (f" {self.remaining:.0f}%"
+                      if show_pct and self.remaining is not None else "")
         if self.widget is not None:
             self.widget.update(self.remaining, self.state, self.subtitle)
 
@@ -129,6 +142,8 @@ class NimbusApp(rumps.App):
         self.remaining = (100.0 - win.utilization) if win and win.utilization is not None else None
         self.subtitle = _countdown(win) or snap.source
         self._render()
+        if self.widget is not None:
+            self.widget.save_geometry()  # keep drag/resize across restarts
         self.item_5h.title = _fmt_line("5-hour", snap.five_hour)
         self.item_7d.title = _fmt_line("7-day", snap.seven_day)
         self.item_src.title = f"source: {snap.source}" + (" [debug]" if self.debug else "")
@@ -187,6 +202,13 @@ class NimbusApp(rumps.App):
             self.widget = CloudWidget()
         self.widget.update(self.remaining, self.state, self.subtitle, animate=False)
         self.widget.show()
+
+    def toggle_percentage(self, item):
+        settings = config.load_settings()
+        settings["show_percentage"] = not settings.get("show_percentage", True)
+        config.save_settings(settings)
+        item.state = settings["show_percentage"]
+        self._render()
 
     def toggle_widget(self, item):
         settings = config.load_settings()

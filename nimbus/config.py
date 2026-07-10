@@ -26,6 +26,9 @@ DEFAULTS = {
     "pet_mode": True,  # animate the desktop cloud widget
     "widget_shown": False,  # desktop pet visible
     "widget_pos": None,  # [x, y] remembered drag position
+    "widget_size": None,  # [w, h] remembered resize
+    "show_percentage": True,  # % text next to the menu bar cloud
+    "first_run_done": False,  # wizard shown once
 }
 
 
