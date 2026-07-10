@@ -2,6 +2,9 @@
 
 Run: python -m nimbus.app          — live monitoring
      python -m nimbus.app --debug  — cycle fixture states (G6: debug only)
+
+Menu bar: drawn cloud icon (orange charge drains to grey as usage is used)
+plus the remaining %. Optional desktop pet: a movable floating cloud widget.
 """
 
 from __future__ import annotations
@@ -13,21 +16,14 @@ import rumps
 from AppKit import NSApplication
 
 from . import config, keeper, notify, status
+from .draw import cloud_image
 from .models import Snapshot, Window
-from .state import ICONS, ResetDetector, cloud_state
+from .state import ResetDetector, cloud_state
+from .widget import CloudWidget
 
 POLL_ACTIVE = 120
 POLL_IDLE = 300  # when discharged/recharging — nothing to watch closely
-
-# pet-mode animation frames per state (menu bar cycles these every 2s)
-FRAMES = {
-    "full": ["☁️", "🌤"],
-    "partly": ["🌥", "☁️"],
-    "thin": ["🌫", "🌥"],
-    "discharged": ["⚡", "🌩"],
-    "recharging": ["🔌", "⚡"],
-    "disconnected": ["⛔"],
-}
+ICON_SIZE = 18.0
 
 
 def _debug_fixtures() -> list[Snapshot]:
@@ -49,19 +45,24 @@ def _debug_fixtures() -> list[Snapshot]:
     ]
 
 
+def _countdown(win: Window | None) -> str:
+    if win is None or win.resets_at is None:
+        return ""
+    mins = max(0, int((win.resets_at - datetime.now(timezone.utc)).total_seconds() // 60))
+    return f"resets in {mins // 60}h{mins % 60:02d}m"
+
+
 def _fmt_line(name: str, win: Window | None) -> str:
     if win is None:
         return f"{name}: unknown"
     pct = f"{win.utilization:.0f}% used" if win.utilization is not None else "?% (estimated)"
-    if win.resets_at:
-        mins = max(0, int((win.resets_at - datetime.now(timezone.utc)).total_seconds() // 60))
-        return f"{name}: {pct} · resets in {mins // 60}h{mins % 60:02d}m"
-    return f"{name}: {pct}"
+    tail = _countdown(win)
+    return f"{name}: {pct}" + (f" · {tail}" if tail else "")
 
 
 class NimbusApp(rumps.App):
     def __init__(self, debug: bool = False):
-        super().__init__("Nimbus", title=ICONS["disconnected"], quit_button="Quit Nimbus")
+        super().__init__("Nimbus", quit_button="Quit Nimbus")
         # menu-bar only: no dock icon (NSApplicationActivationPolicyAccessory)
         NSApplication.sharedApplication().setActivationPolicy_(1)
         self.debug = debug
@@ -72,7 +73,8 @@ class NimbusApp(rumps.App):
         self.fixture_i = 0
         self.state = "disconnected"
         self.remaining: float | None = None
-        self.frame_i = 0
+        self.subtitle = ""
+        self.widget: CloudWidget | None = None
 
         settings = config.load_settings()
         self.item_5h = rumps.MenuItem("5-hour: …")
@@ -81,11 +83,12 @@ class NimbusApp(rumps.App):
         self.item_keeper = rumps.MenuItem("Window keeper (1 ping per reset)",
                                           callback=self.toggle_keeper)
         self.item_keeper.state = bool(settings.get("keeper_enabled"))
-        self.item_pet = rumps.MenuItem("Animate cloud (pet mode)", callback=self.toggle_pet)
-        self.item_pet.state = bool(settings.get("pet_mode", True))
+        self.item_widget = rumps.MenuItem("Show desktop cloud (pet)",
+                                          callback=self.toggle_widget)
+        self.item_widget.state = bool(settings.get("widget_shown"))
         self.menu = [self.item_5h, self.item_7d, self.item_src, None,
                      rumps.MenuItem("Refresh now", callback=lambda _: self.refresh()),
-                     self.item_keeper, self.item_pet, None]
+                     self.item_keeper, self.item_widget, None]
 
         interval = 3 if debug else POLL_ACTIVE
         self.timer = rumps.Timer(lambda _: self.refresh(), interval)
@@ -93,18 +96,26 @@ class NimbusApp(rumps.App):
         self.anim_timer = rumps.Timer(self._animate, 2)
         self.anim_timer.start()
         self.refresh()
+        if settings.get("widget_shown"):
+            self._show_widget()
 
-    # -- menu bar title ----------------------------------------------------
-    def _set_title(self):
-        pet = bool(config.load_settings().get("pet_mode", True))
-        frames = FRAMES[self.state] if pet else [ICONS[self.state]]
-        glyph = frames[self.frame_i % len(frames)]
-        pct = f" {self.remaining:.0f}%" if self.remaining is not None else ""
-        self.title = f"{glyph}{pct}"
+    # -- rendering ---------------------------------------------------------
+    def _render(self):
+        img = cloud_image(ICON_SIZE, self.remaining, self.state)
+        img.setTemplate_(False)
+        self._icon_nsimage = img
+        try:
+            self._nsapp.setStatusBarIcon()
+        except AttributeError:
+            pass  # before run() — initializeStatusBar picks it up
+        self.title = f" {self.remaining:.0f}%" if self.remaining is not None else ""
+        if self.widget is not None:
+            self.widget.update(self.remaining, self.state, self.subtitle)
 
     def _animate(self, _):
-        self.frame_i += 1
-        self._set_title()
+        # gentle bobbing for the desktop pet only; menu bar icon stays still
+        if self.widget is not None:
+            self.widget.update(self.remaining, self.state, self.subtitle, animate=True)
 
     # -- polling ---------------------------------------------------------
     def refresh(self):
@@ -113,18 +124,18 @@ class NimbusApp(rumps.App):
             self.fixture_i += 1
         else:
             snap = status.get_snapshot()
-        state = cloud_state(snap)
-        self.state = state
+        self.state = cloud_state(snap)
         win = snap.five_hour
         self.remaining = (100.0 - win.utilization) if win and win.utilization is not None else None
-        self._set_title()
+        self.subtitle = _countdown(win) or snap.source
+        self._render()
         self.item_5h.title = _fmt_line("5-hour", snap.five_hour)
         self.item_7d.title = _fmt_line("7-day", snap.seven_day)
         self.item_src.title = f"source: {snap.source}" + (" [debug]" if self.debug else "")
 
         # adaptive poll interval (FACTS.md)
         if not self.debug:
-            want = POLL_IDLE if state in ("discharged", "recharging") else POLL_ACTIVE
+            want = POLL_IDLE if self.state in ("discharged", "recharging") else POLL_ACTIVE
             if self.timer.interval != want:
                 self.timer.stop()
                 self.timer = rumps.Timer(lambda _: self.refresh(), want)
@@ -171,12 +182,22 @@ class NimbusApp(rumps.App):
         config.save_settings(settings)
         item.state = settings["keeper_enabled"]
 
-    def toggle_pet(self, item):
+    def _show_widget(self):
+        if self.widget is None:
+            self.widget = CloudWidget()
+        self.widget.update(self.remaining, self.state, self.subtitle, animate=False)
+        self.widget.show()
+
+    def toggle_widget(self, item):
         settings = config.load_settings()
-        settings["pet_mode"] = not settings.get("pet_mode", True)
+        shown = not settings.get("widget_shown")
+        settings["widget_shown"] = shown
         config.save_settings(settings)
-        item.state = settings["pet_mode"]
-        self._set_title()
+        item.state = shown
+        if shown:
+            self._show_widget()
+        elif self.widget is not None:
+            self.widget.hide()
 
 
 def main():
