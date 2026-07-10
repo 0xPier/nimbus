@@ -34,6 +34,8 @@ Rules: read this file at the start of every session. Update it **only after a do
 
 - 2026-07-10 — UI rework per Pier: no dock icon (accessory activation policy); menu bar icon is now a *drawn* cloud (orange charge that drains to grey as usage is used, bolt when discharged, green bolt recharging, red slash disconnected) + remaining % text; new movable desktop pet widget (borderless floating panel, drag anywhere, position remembered, gentle bob animation, % + countdown) toggled via "Show desktop cloud (pet)". Icon renders verified visually across all states.
 
+- 2026-07-10 — Added per Pier: "Show percentage in menu bar" toggle; desktop pet is now resizable from any edge (aspect-locked 110–500px, geometry persisted across restarts); first-run wizard (welcome → live-source check → pet opt-in → keeper opt-in with G3 disclosure, safe defaults on every step, shown once via `first_run_done`).
+
 ## Notes / blockers
 
 - Endpoint is internal/undocumented (see FACTS.md caveat) — fetcher must degrade to JSONL + honest disconnected state (G6) on any failure.
