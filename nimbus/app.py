@@ -10,6 +10,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import rumps
+from AppKit import NSApplication
 
 from . import config, keeper, notify, status
 from .models import Snapshot, Window
@@ -17,6 +18,16 @@ from .state import ICONS, ResetDetector, cloud_state
 
 POLL_ACTIVE = 120
 POLL_IDLE = 300  # when discharged/recharging — nothing to watch closely
+
+# pet-mode animation frames per state (menu bar cycles these every 2s)
+FRAMES = {
+    "full": ["☁️", "🌤"],
+    "partly": ["🌥", "☁️"],
+    "thin": ["🌫", "🌥"],
+    "discharged": ["⚡", "🌩"],
+    "recharging": ["🔌", "⚡"],
+    "disconnected": ["⛔"],
+}
 
 
 def _debug_fixtures() -> list[Snapshot]:
@@ -51,27 +62,49 @@ def _fmt_line(name: str, win: Window | None) -> str:
 class NimbusApp(rumps.App):
     def __init__(self, debug: bool = False):
         super().__init__("Nimbus", title=ICONS["disconnected"], quit_button="Quit Nimbus")
+        # menu-bar only: no dock icon (NSApplicationActivationPolicyAccessory)
+        NSApplication.sharedApplication().setActivationPolicy_(1)
         self.debug = debug
         self.detector = ResetDetector()
         self.keeper_pings_this_reset = 0
         self.retry_timer: rumps.Timer | None = None
         self.fixtures = _debug_fixtures() if debug else None
         self.fixture_i = 0
+        self.state = "disconnected"
+        self.remaining: float | None = None
+        self.frame_i = 0
 
+        settings = config.load_settings()
         self.item_5h = rumps.MenuItem("5-hour: …")
         self.item_7d = rumps.MenuItem("7-day: …")
         self.item_src = rumps.MenuItem("source: …")
         self.item_keeper = rumps.MenuItem("Window keeper (1 ping per reset)",
                                           callback=self.toggle_keeper)
-        self.item_keeper.state = bool(config.load_settings().get("keeper_enabled"))
+        self.item_keeper.state = bool(settings.get("keeper_enabled"))
+        self.item_pet = rumps.MenuItem("Animate cloud (pet mode)", callback=self.toggle_pet)
+        self.item_pet.state = bool(settings.get("pet_mode", True))
         self.menu = [self.item_5h, self.item_7d, self.item_src, None,
                      rumps.MenuItem("Refresh now", callback=lambda _: self.refresh()),
-                     self.item_keeper, None]
+                     self.item_keeper, self.item_pet, None]
 
         interval = 3 if debug else POLL_ACTIVE
         self.timer = rumps.Timer(lambda _: self.refresh(), interval)
         self.timer.start()
+        self.anim_timer = rumps.Timer(self._animate, 2)
+        self.anim_timer.start()
         self.refresh()
+
+    # -- menu bar title ----------------------------------------------------
+    def _set_title(self):
+        pet = bool(config.load_settings().get("pet_mode", True))
+        frames = FRAMES[self.state] if pet else [ICONS[self.state]]
+        glyph = frames[self.frame_i % len(frames)]
+        pct = f" {self.remaining:.0f}%" if self.remaining is not None else ""
+        self.title = f"{glyph}{pct}"
+
+    def _animate(self, _):
+        self.frame_i += 1
+        self._set_title()
 
     # -- polling ---------------------------------------------------------
     def refresh(self):
@@ -81,7 +114,10 @@ class NimbusApp(rumps.App):
         else:
             snap = status.get_snapshot()
         state = cloud_state(snap)
-        self.title = ICONS[state]
+        self.state = state
+        win = snap.five_hour
+        self.remaining = (100.0 - win.utilization) if win and win.utilization is not None else None
+        self._set_title()
         self.item_5h.title = _fmt_line("5-hour", snap.five_hour)
         self.item_7d.title = _fmt_line("7-day", snap.seven_day)
         self.item_src.title = f"source: {snap.source}" + (" [debug]" if self.debug else "")
@@ -134,6 +170,13 @@ class NimbusApp(rumps.App):
             settings["keeper_enabled"] = False
         config.save_settings(settings)
         item.state = settings["keeper_enabled"]
+
+    def toggle_pet(self, item):
+        settings = config.load_settings()
+        settings["pet_mode"] = not settings.get("pet_mode", True)
+        config.save_settings(settings)
+        item.state = settings["pet_mode"]
+        self._set_title()
 
 
 def main():

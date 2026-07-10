@@ -23,6 +23,7 @@ DEFAULTS = {
     "keeper_enabled": False,  # G3: OFF by default
     "keeper_model": "haiku",  # Pier's decision #2
     "keeper_anchor_override": None,  # "HH:MM" manual anchor, else observed reset
+    "pet_mode": True,  # animate the menu bar cloud
 }
 
 
