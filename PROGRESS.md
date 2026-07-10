@@ -9,15 +9,15 @@ Rules: read this file at the start of every session. Update it **only after a do
 ## Phase checklist
 
 - [x] STEP 0 — Control layer scaffolded (CLAUDE.md, FACTS.md, PROGRESS.md, BUILD_PHASES.md)
-- [ ] P1 — Data layer (blocked on: G7 endpoint verification + owner decision #1)
-- [ ] P2 — Cloud in the menu bar
-- [ ] P3 — Notifications
-- [ ] P4 — Window keeper (opt-in)
-- [ ] P5 — Ship
+- [ ] P1 — Data layer — built; JSONL/disconnected paths verified. **Blocked on live %: Claude Code OAuth token in Keychain expired 2026-05-31 (endpoint returns 401). Waiting on Pier: refresh via a claude run, or paste sessionKey.**
+- [ ] P2 — Cloud in the menu bar — built; 10s debug smoke test clean, state mapping unit-verified (6/6 states). **Awaiting Pier's visual confirmation of `--debug` cycling.**
+- [x] P3 — Notifications — reset detector fires exactly once across repeated polls (simulated, 8 polls → 1 event) and a real notification was sent end-to-end via osascript.
+- [ ] P4 — Window keeper — built; stub-CLI test shows exactly 1 call with correct argv (`-p "Reply with exactly: ok" --model haiku`), off-by-default enforced. **Full done-when needs a real reset event with toggle on/off.**
+- [ ] P5 — Ship — install.sh ran: LaunchAgent loaded and app running. README privacy section done. **Reboot-survival and uninstall not yet exercised.**
 
 ## Open owner decisions (park here, don't guess — Pier decides)
 
-*(none currently open)*
+4. OAuth token refresh: the Claude Code Keychain token is expired. Should Nimbus (a) rely on Pier refreshing it by using claude normally [recommended — keeps Nimbus strictly read-only per G2], or (b) refresh tokens itself with the refreshToken [writes to Claude Code's Keychain item; refresh-token rotation could break the CLI login], or (c) use the pasted sessionKey cookie instead?
 
 ## Decided by Pier (2026-07-10)
 

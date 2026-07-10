@@ -11,21 +11,26 @@ import getpass
 import sys
 from datetime import datetime, timezone
 
-from . import config
-from .api import ApiUnavailable, fetch_usage
+from . import api, config, oauth
+from .api import ApiUnavailable
 from .jsonl import estimate_usage
 from .models import Snapshot, Window
 
 
 def get_snapshot() -> Snapshot:
-    try:
-        return fetch_usage()
-    except ApiUnavailable as exc:
-        fallback = estimate_usage()
-        if fallback.five_hour is not None:
-            fallback.detail = f"API unavailable ({exc}); {fallback.detail}"
-            return fallback
-        return Snapshot(source="disconnected", detail=str(exc))
+    """Source order per FACTS.md: OAuth -> sessionKey API -> JSONL -> disconnected."""
+    errors = []
+    for source in (oauth.fetch_usage, api.fetch_usage):
+        try:
+            return source()
+        except ApiUnavailable as exc:
+            errors.append(str(exc))
+    reason = "; ".join(errors)
+    fallback = estimate_usage()
+    if fallback.five_hour is not None:
+        fallback.detail = f"API unavailable ({reason}); {fallback.detail}"
+        return fallback
+    return Snapshot(source="disconnected", detail=reason)
 
 
 def _fmt_window(name: str, win: Window | None) -> str:

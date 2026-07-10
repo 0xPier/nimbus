@@ -22,6 +22,12 @@ Extend this file with **verified values only** — every added fact needs a sour
   - Auth: `Cookie: sessionKey=sk-ant-sid...` (session key from claude.ai cookies, stored in Keychain per G1). Usage4Claude notes Cloudflare may additionally require `cf_clearance`/`__cf_bm` cookies — treat a 403 as "disconnected" (G6), never scrape them via UI automation (G4).
   - Response schema: `{ "five_hour": {"utilization": <0–100 float>, "resets_at": "<ISO 8601>"}, "seven_day": {...same}, "seven_day_opus": {...}, "seven_day_sonnet": {...} }` — `seven_day*` fields optional.
   - Caveat: internal, undocumented endpoint; may change without notice. If it breaks, fall back to JSONL and show honest state per G6.
+- OAuth data source — **verified per G7 on 2026-07-10** from Usage4Claude source (`Usage4Claude/Services/ClaudeOAuth/ClaudeOAuthConfig.swift`, https://github.com/f-is-h/Usage4Claude), **Pier-approved for monitoring**:
+  - Usage: `GET https://api.anthropic.com/api/oauth/usage`
+  - Headers: `Authorization: Bearer <accessToken>` + `anthropic-beta: oauth-2025-04-20`
+  - Same response schema as the sessionKey endpoint (`five_hour`/`seven_day`/`seven_day_opus`/`seven_day_sonnet`, each `utilization` + `resets_at`).
+  - Token source: Claude Code's existing login, macOS Keychain item service `Claude Code-credentials` (JSON: `claudeAiOauth.accessToken`, `refreshToken`, `expiresAt` ms-epoch). Nimbus reads it **read-only** (G2) and never refreshes or mutates it — an expired token means "fall back", Claude Code refreshes it itself on next use.
+  - Source order in Nimbus: OAuth → sessionKey endpoint → local JSONL → disconnected.
 
 ## UI
 
