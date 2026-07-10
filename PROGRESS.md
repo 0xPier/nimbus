@@ -29,6 +29,7 @@ Rules: read this file at the start of every session. Update it **only after a do
 
 - 2026-07-10 — STEP 0: scaffolded the control layer (4 files). No feature code written.
 - 2026-07-10 — Pier decided all 3 open decisions (see "Decided by Pier"). G7 verification complete: usage endpoint, auth, and response schema recorded in FACTS.md with source links. P1 is unblocked.
+- 2026-07-10 — P1 built: `nimbus/` package (models, config+Keychain, api fetcher, jsonl fallback, status CLI). Verified: JSONL fallback derives the live window from real logs (opened 13:08 → resets 18:08, utilization honestly unknown); simulated network cut with key → clean JSONL fallback; no key + no JSONL → `disconnected` (exit 2). **Not yet verified: live API % (needs Pier's sessionKey via `python -m nimbus.status --set-key`). P1 done-when therefore NOT passed — box stays unchecked.**
 
 ## Notes / blockers
 
