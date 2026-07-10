@@ -36,6 +36,8 @@ Rules: read this file at the start of every session. Update it **only after a do
 
 - 2026-07-10 — Added per Pier: "Show percentage in menu bar" toggle; desktop pet is now resizable from any edge (aspect-locked 110–500px, geometry persisted across restarts); first-run wizard (welcome → live-source check → pet opt-in → keeper opt-in with G3 disclosure, safe defaults on every step, shown once via `first_run_done`).
 
+- 2026-07-10 — Guardrail audit passed (see session notes): network = 2 Anthropic endpoints only, GET-only, persistence = settings + timestamp-only keeper log, fixtures gated behind --debug, keeper capped at 1+1. README rebuilt with state gallery rendered from the app's own draw code. Published publicly: https://github.com/0xPier/nimbus (history scrubbed of attribution trailers per Pier).
+
 ## Notes / blockers
 
 - Endpoint is internal/undocumented (see FACTS.md caveat) — fetcher must degrade to JSONL + honest disconnected state (G6) on any failure.
