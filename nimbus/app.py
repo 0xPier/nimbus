@@ -23,6 +23,8 @@ from .widget import CloudWidget
 
 POLL_ACTIVE = 120
 POLL_IDLE = 300  # when discharged/recharging — nothing to watch closely
+POLL_BACKOFF = 420  # after a rate-limit (HTTP 429) — be a polite client
+STALE_GRACE = 900  # keep showing last good live data for up to 15 min, labeled stale
 ICON_SIZE = 18.0
 
 
@@ -75,6 +77,7 @@ class NimbusApp(rumps.App):
         self.remaining: float | None = None
         self.subtitle = ""
         self.widget: CloudWidget | None = None
+        self.last_good: tuple[Snapshot, datetime] | None = None
 
         settings = config.load_settings()
         self.item_5h = rumps.MenuItem("5-hour: …")
@@ -137,6 +140,19 @@ class NimbusApp(rumps.App):
             self.fixture_i += 1
         else:
             snap = status.get_snapshot()
+        now = datetime.now(timezone.utc)
+        rate_limited = "429" in snap.detail
+        if snap.source in ("oauth", "api"):
+            self.last_good = (snap, now)
+        elif self.last_good is not None:
+            # transient API failure: keep last live numbers, honestly labeled
+            good, ts = self.last_good
+            age = (now - ts).total_seconds()
+            if age < STALE_GRACE and good.five_hour and good.five_hour.resets_at and \
+                    good.five_hour.resets_at > now:
+                good.detail = f"live data {int(age // 60)}m old" + \
+                    (" (rate-limited, backing off)" if rate_limited else " (API unavailable)")
+                snap = good
         self.state = cloud_state(snap)
         win = snap.five_hour
         self.remaining = (100.0 - win.utilization) if win and win.utilization is not None else None
@@ -146,11 +162,19 @@ class NimbusApp(rumps.App):
             self.widget.save_geometry()  # keep drag/resize across restarts
         self.item_5h.title = _fmt_line("5-hour", snap.five_hour)
         self.item_7d.title = _fmt_line("7-day", snap.seven_day)
-        self.item_src.title = f"source: {snap.source}" + (" [debug]" if self.debug else "")
+        src = f"source: {snap.source}"
+        if snap.detail:
+            src += f" — {snap.detail}"
+        self.item_src.title = src + (" [debug]" if self.debug else "")
 
-        # adaptive poll interval (FACTS.md)
+        # adaptive poll interval (FACTS.md); polite backoff on rate-limit
         if not self.debug:
-            want = POLL_IDLE if self.state in ("discharged", "recharging") else POLL_ACTIVE
+            if rate_limited:
+                want = POLL_BACKOFF
+            elif self.state in ("discharged", "recharging"):
+                want = POLL_IDLE
+            else:
+                want = POLL_ACTIVE
             if self.timer.interval != want:
                 self.timer.stop()
                 self.timer = rumps.Timer(lambda _: self.refresh(), want)
