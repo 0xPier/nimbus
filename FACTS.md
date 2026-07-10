@@ -16,7 +16,12 @@ Extend this file with **verified values only** — every added fact needs a sour
 ## Data sources
 
 - Local data source: Claude Code writes session JSONL under `~/.claude/projects/` — usable for usage estimation without any network call.
-- Remote data source: session-key-authenticated usage endpoint — **[VERIFY per G7 before use; record endpoint, header, response schema, and source link here]**.
+- Remote data source — **verified per G7 on 2026-07-10** from Usage4Claude source (`Usage4Claude/Services/ClaudeAPIService.swift` and `Models/ClaudeAPIResponseModels.swift`, https://github.com/f-is-h/Usage4Claude):
+  - Usage: `GET https://claude.ai/api/organizations/{org_id}/usage`
+  - Org lookup: `GET https://claude.ai/api/organizations` (org id also appears in the `lastActiveOrg` cookie)
+  - Auth: `Cookie: sessionKey=sk-ant-sid...` (session key from claude.ai cookies, stored in Keychain per G1). Usage4Claude notes Cloudflare may additionally require `cf_clearance`/`__cf_bm` cookies — treat a 403 as "disconnected" (G6), never scrape them via UI automation (G4).
+  - Response schema: `{ "five_hour": {"utilization": <0–100 float>, "resets_at": "<ISO 8601>"}, "seven_day": {...same}, "seven_day_opus": {...}, "seven_day_sonnet": {...} }` — `seven_day*` fields optional.
+  - Caveat: internal, undocumented endpoint; may change without notice. If it breaks, fall back to JSONL and show honest state per G6.
 
 ## UI
 

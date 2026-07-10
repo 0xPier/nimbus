@@ -17,14 +17,19 @@ Rules: read this file at the start of every session. Update it **only after a do
 
 ## Open owner decisions (park here, don't guess — Pier decides)
 
-1. Primary data source: session-key endpoint (covers app + Code usage) vs local JSONL only (zero credentials, Code-only accuracy) vs both.
-2. Keeper default schedule anchor (e.g. 07:00 local) and model (sonnet as requested vs haiku to minimize burn).
-3. Whether the discharged cloud should also show the weekly cap or only the 5h window.
+*(none currently open)*
+
+## Decided by Pier (2026-07-10)
+
+1. **Data source: both** — session-key endpoint primary, local JSONL fallback.
+2. **Keeper: haiku model.** Schedule anchor is **read from the actual observed reset time**, with a settings field letting the user override/input it manually.
+3. **Discharged cloud shows both** the 5h window and the 7-day cap.
 
 ## Session log
 
-- 2026-07-10 — STEP 0: scaffolded the control layer (4 files). No feature code written. Next: verify the usage endpoint per G7 and get owner decision #1 before writing the fetcher.
+- 2026-07-10 — STEP 0: scaffolded the control layer (4 files). No feature code written.
+- 2026-07-10 — Pier decided all 3 open decisions (see "Decided by Pier"). G7 verification complete: usage endpoint, auth, and response schema recorded in FACTS.md with source links. P1 is unblocked.
 
 ## Notes / blockers
 
-- G7: usage endpoint is unverified — `FACTS.md` carries a [VERIFY] placeholder. Do not write the remote fetcher until verified or Pier decides JSONL-only.
+- Endpoint is internal/undocumented (see FACTS.md caveat) — fetcher must degrade to JSONL + honest disconnected state (G6) on any failure.
