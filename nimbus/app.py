@@ -21,9 +21,9 @@ from .models import Snapshot, Window
 from .state import ResetDetector, cloud_state
 from .widget import CloudWidget
 
-POLL_ACTIVE = 120
-POLL_IDLE = 300  # when discharged/recharging — nothing to watch closely
-POLL_BACKOFF = 420  # after a rate-limit (HTTP 429) — be a polite client
+POLL_ACTIVE = 300  # override via settings.json "poll_interval"
+POLL_IDLE = 600  # when discharged/recharging — nothing to watch closely
+POLL_BACKOFF = 900  # after a rate-limit (HTTP 429) — be a polite client
 STALE_GRACE = 900  # keep showing last good live data for up to 15 min, labeled stale
 ICON_SIZE = 18.0
 
@@ -169,12 +169,13 @@ class NimbusApp(rumps.App):
 
         # adaptive poll interval (FACTS.md); polite backoff on rate-limit
         if not self.debug:
+            active = int(config.load_settings().get("poll_interval") or POLL_ACTIVE)
             if rate_limited:
-                want = POLL_BACKOFF
+                want = max(POLL_BACKOFF, active)
             elif self.state in ("discharged", "recharging"):
-                want = POLL_IDLE
+                want = max(POLL_IDLE, active)
             else:
-                want = POLL_ACTIVE
+                want = active
             if self.timer.interval != want:
                 self.timer.stop()
                 self.timer = rumps.Timer(lambda _: self.refresh(), want)

@@ -32,4 +32,4 @@ Extend this file with **verified values only** — every added fact needs a sour
 ## UI
 
 - Cloud states (menu bar template icons): ☁️ full ≥80% remaining → partly-drained 79–40% → thin 39–15% → ⚡ discharged <15% or locked out → 🔌 recharging (locked, reset pending) → ⛔ disconnected (G6).
-- Poll interval default 120s; back off to 300s when idle.
+- Poll interval default 300s (configurable via settings `poll_interval`); 600s when idle (discharged/recharging), 900s after an HTTP 429. Rationale: 300s is ~1.7% of the 5h window — plenty of resolution — and the oauth usage endpoint rate-limits aggressive pollers (observed 2026-07-10).

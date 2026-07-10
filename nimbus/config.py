@@ -19,7 +19,7 @@ SETTINGS_PATH = SETTINGS_DIR / "settings.json"
 
 DEFAULTS = {
     "org_id": None,  # cached from GET /api/organizations
-    "poll_interval": 120,  # seconds; 300 when idle (FACTS.md)
+    "poll_interval": 300,  # seconds; 600 when idle, 900 after a 429 (FACTS.md)
     "keeper_enabled": False,  # G3: OFF by default
     "keeper_model": "haiku",  # Pier's decision #2
     "keeper_anchor_override": None,  # "HH:MM" manual anchor, else observed reset
