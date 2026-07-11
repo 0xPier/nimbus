@@ -1,9 +1,11 @@
 """Nimbus's own OAuth login (Pier decision #5, endpoints verified per G7).
 
-One-time browser approval with read-only scope `user:profile`. Tokens live in
-Nimbus's OWN Keychain item (service "Nimbus", account "oauth") and Nimbus
-refreshes them itself. Claude Code's credentials are never read here, let
-alone written (G2).
+Manual-paste PKCE flow — the public client only accepts the hosted callback
+page, not localhost (FACTS.md): the browser opens claude.ai for approval with
+read-only scope `user:profile`, the callback page displays a code, the user
+pastes it back. Tokens live in Nimbus's OWN Keychain item (service "Nimbus",
+account "oauth") and Nimbus refreshes them itself. Claude Code's credentials
+are never touched (G2).
 
 Run: python -m nimbus.login
 """
@@ -12,10 +14,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import http.server
 import json
 import secrets
-import threading
 import time
 import urllib.parse
 import webbrowser
@@ -25,10 +25,9 @@ import requests
 
 AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
 TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
+REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback"
 CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"  # public PKCE client
 SCOPE = "user:profile"  # read-only usage
-PORTS = (1456, 1458)
-CALLBACK_PATH = "/callback"
 
 KEYCHAIN_SERVICE = "Nimbus"
 KEYCHAIN_ACCOUNT = "oauth"
@@ -100,84 +99,54 @@ def get_access_token() -> str | None:
     return tokens["access_token"] if tokens else None
 
 
-class _Callback(http.server.BaseHTTPRequestHandler):
-    result: dict = {}
-
-    def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        if parsed.path != CALLBACK_PATH:
-            self.send_response(404)
-            self.end_headers()
-            return
-        _Callback.result = dict(urllib.parse.parse_qsl(parsed.query))
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.end_headers()
-        self.wfile.write(b"<h2>Nimbus is connected &#9729;&#65039;</h2>"
-                         b"You can close this tab.")
-        threading.Thread(target=self.server.shutdown, daemon=True).start()
-
-    def log_message(self, *args):
-        pass  # no request logging (G1)
-
-
-def login(timeout: int = 300) -> bool:
-    """Full PKCE browser flow. Returns True on success."""
+def build_authorize() -> tuple[str, str, str]:
+    """Returns (authorize_url, code_verifier, state)."""
     verifier = _b64url(secrets.token_bytes(32))
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
     state = _b64url(secrets.token_bytes(16))
-
-    server = None
-    port = None
-    for candidate in PORTS:
-        try:
-            server = http.server.HTTPServer(("127.0.0.1", candidate), _Callback)
-            port = candidate
-            break
-        except OSError:
-            continue
-    if server is None:
-        print("ports 1456/1458 busy — close whatever is using them and retry")
-        return False
-
-    redirect_uri = f"http://localhost:{port}{CALLBACK_PATH}"
     params = urllib.parse.urlencode({
+        "code": "true",  # required — the callback page displays a paste-able code
         "response_type": "code",
         "client_id": CLIENT_ID,
-        "redirect_uri": redirect_uri,
+        "redirect_uri": REDIRECT_URI,
         "scope": SCOPE,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
         "state": state,
     })
-    url = f"{AUTHORIZE_URL}?{params}"
-    print("Opening browser for Claude approval (read-only usage scope)…")
-    print(f"If it doesn't open, visit:\n  {url}")
-    webbrowser.open(url)
+    return f"{AUTHORIZE_URL}?{params}", verifier, state
 
-    server.timeout = timeout
-    _Callback.result = {}
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    thread.join(timeout)
-    server.shutdown()
 
-    result = _Callback.result
-    if not result:
-        print("timed out waiting for the browser callback")
-        return False
-    if result.get("error"):
-        print(f"authorization refused: {result['error']}")
-        return False
-    if result.get("state") != state:
+def parse_pasted_code(raw: str) -> tuple[str, str | None]:
+    """Accepts 'code#state', a bare code, or the full callback URL.
+    Returns (code, state_or_None)."""
+    raw = raw.strip()
+    if not raw:
+        raise ValueError("empty code")
+    if raw.startswith("http"):
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(raw).query)
+        code = (qs.get("code") or [None])[0]
+        state = (qs.get("state") or [None])[0]
+        if not code:
+            raise ValueError("URL has no code parameter")
+        return code, state
+    if "#" in raw:
+        code, _, state = raw.partition("#")
+        return code, state or None
+    return raw, None
+
+
+def exchange(pasted: str, verifier: str, state: str) -> bool:
+    """Exchange the pasted code for tokens. Returns True on success."""
+    code, returned_state = parse_pasted_code(pasted)
+    if returned_state is not None and returned_state != state:
         print("state mismatch — aborting (possible tampering)")
         return False
-
     resp = requests.post(TOKEN_URL, json={
         "grant_type": "authorization_code",
-        "code": result.get("code"),
-        "state": result.get("state"),
-        "redirect_uri": redirect_uri,
+        "code": code,
+        "state": returned_state or state,
+        "redirect_uri": REDIRECT_URI,
         "client_id": CLIENT_ID,
         "code_verifier": verifier,
     }, timeout=15)
@@ -185,8 +154,24 @@ def login(timeout: int = 300) -> bool:
         print(f"token exchange failed: HTTP {resp.status_code}")
         return False
     _store_response(resp.json())
-    print("Connected — Nimbus now has its own read-only token (Keychain: Nimbus/oauth).")
     return True
+
+
+def login() -> bool:
+    """CLI flow: open browser, prompt for the pasted code."""
+    url, verifier, state = build_authorize()
+    print("Opening browser for Claude approval (read-only usage scope)…")
+    print(f"If it doesn't open, visit:\n  {url}\n")
+    webbrowser.open(url)
+    pasted = input("Paste the code shown after approving: ")
+    try:
+        ok = exchange(pasted, verifier, state)
+    except ValueError as exc:
+        print(f"could not parse that: {exc}")
+        return False
+    if ok:
+        print("Connected — Nimbus now has its own read-only token (Keychain: Nimbus/oauth).")
+    return ok
 
 
 if __name__ == "__main__":

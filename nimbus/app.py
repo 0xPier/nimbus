@@ -279,18 +279,28 @@ class NimbusApp(rumps.App):
         item.state = settings["keeper_enabled"]
 
     def connect_live(self, _):
-        import threading
+        import webbrowser
 
         from . import login
 
-        def flow():
-            ok = login.login()
-            notify.send("Nimbus connected — live data flowing" if ok
-                        else "Login didn't complete — try again from the menu")
-            if ok:
-                self.refresh()
-
-        threading.Thread(target=flow, daemon=True).start()
+        url, verifier, state = login.build_authorize()
+        webbrowser.open(url)
+        window = rumps.Window(
+            title="Connect Nimbus",
+            message="Approve in the browser (read-only usage scope), then paste "
+                    "the code the page shows you:",
+            default_text="", ok="Connect", cancel="Cancel", dimensions=(320, 24))
+        resp = window.run()
+        if resp.clicked != 1 or not resp.text.strip():
+            return
+        try:
+            ok = login.exchange(resp.text, verifier, state)
+        except ValueError:
+            ok = False
+        notify.send("Nimbus connected — live data flowing" if ok
+                    else "Login didn't complete — try again from the menu")
+        if ok:
+            self.refresh()
 
     def _show_widget(self):
         if self.widget is None:
