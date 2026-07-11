@@ -27,7 +27,12 @@ Extend this file with **verified values only** — every added fact needs a sour
   - Headers: `Authorization: Bearer <accessToken>` + `anthropic-beta: oauth-2025-04-20`
   - Same response schema as the sessionKey endpoint (`five_hour`/`seven_day`/`seven_day_opus`/`seven_day_sonnet`, each `utilization` + `resets_at`).
   - Token source: Claude Code's existing login, macOS Keychain item service `Claude Code-credentials` (JSON: `claudeAiOauth.accessToken`, `refreshToken`, `expiresAt` ms-epoch). Nimbus reads it **read-only** (G2) and never refreshes or mutates it — an expired token means "fall back", Claude Code refreshes it itself on next use.
-  - Source order in Nimbus: OAuth → sessionKey endpoint → local JSONL → disconnected.
+  - Source order in Nimbus: Nimbus's own OAuth → Claude Code OAuth → sessionKey endpoint → local JSONL → disconnected.
+- Nimbus's own OAuth login — **verified per G7 on 2026-07-11** from Usage4Claude source (`Views/WebLogin/ClaudeOAuthCoordinator.swift`, `Services/ClaudeOAuth/ClaudeOAuthConfig.swift`, `Services/ClaudeOAuth/ClaudeOAuthService.swift`; https://github.com/f-is-h/Usage4Claude). **Pier decision #5**: Nimbus holds its own read-only token and refreshes itself; it never writes Claude Code's credentials.
+  - Authorize: `https://claude.ai/oauth/authorize` with query `response_type=code`, `client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e` (public PKCE client), `redirect_uri=http://localhost:1456/callback` (fallback port 1458), `scope=user:profile` (read-only), `code_challenge` (S256), `code_challenge_method=S256`, `state`.
+  - Token exchange: `POST https://console.anthropic.com/v1/oauth/token`, JSON body `{grant_type: "authorization_code", code, state, redirect_uri, client_id, code_verifier}`.
+  - Refresh: same URL, JSON `{grant_type: "refresh_token", refresh_token, client_id}`.
+  - PKCE per RFC 7636 (S256, base64url, no padding). Nimbus stores its tokens in Keychain service `Nimbus`, account `oauth` — its own item only.
 
 ## UI
 

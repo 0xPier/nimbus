@@ -62,9 +62,23 @@ def _parse_window(raw: dict | None) -> Window | None:
     return Window(utilization=utilization, resets_at=resets_at, estimated=False)
 
 
+def fetch_usage_own() -> Snapshot:
+    """Fetch usage via Nimbus's own OAuth login (auto-refreshed)."""
+    from . import login
+    token = login.get_access_token()
+    if not token:
+        raise ApiUnavailable("Nimbus not connected (run: python -m nimbus.login)")
+    snap = _fetch_with_token(token)
+    snap.source = "nimbus"
+    return snap
+
+
 def fetch_usage() -> Snapshot:
     """Fetch usage via the Claude Code OAuth token. Raises ApiUnavailable."""
-    token = _read_access_token()
+    return _fetch_with_token(_read_access_token())
+
+
+def _fetch_with_token(token: str) -> Snapshot:
     try:
         resp = requests.get(
             USAGE_URL,

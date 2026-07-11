@@ -18,9 +18,10 @@ from .models import Snapshot, Window
 
 
 def get_snapshot() -> Snapshot:
-    """Source order per FACTS.md: OAuth -> sessionKey API -> JSONL -> disconnected."""
+    """Source order per FACTS.md: own OAuth -> Claude Code OAuth -> sessionKey API
+    -> JSONL -> disconnected."""
     errors = []
-    for source in (oauth.fetch_usage, api.fetch_usage):
+    for source in (oauth.fetch_usage_own, oauth.fetch_usage, api.fetch_usage):
         try:
             return source()
         except ApiUnavailable as exc:

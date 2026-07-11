@@ -25,6 +25,7 @@ Rules: read this file at the start of every session. Update it **only after a do
 2. **Keeper: haiku model.** Schedule anchor is **read from the actual observed reset time**, with a settings field letting the user override/input it manually.
 3. **Discharged cloud shows both** the 5h window and the 7-day cap.
 4. **OAuth refresh: Pier refreshes it himself** by using claude normally — Nimbus stays strictly read-only (G2), never touches Claude Code's Keychain item.
+5. (2026-07-11) **Nimbus gets its own OAuth login** — one-time browser approval, read-only scope `user:profile`, own Keychain item, refreshes its own token. Supersedes the day-to-day pain of #4; the never-touch-Claude-Code's-credentials rule stands.
 
 ## Session log
 

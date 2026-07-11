@@ -101,6 +101,8 @@ class NimbusApp(rumps.App):
         self.item_anim.state = bool(settings.get("reset_animation", True))
         self.menu = [self.item_5h, self.item_7d, self.item_src, None,
                      rumps.MenuItem("Refresh now", callback=lambda _: self.refresh()),
+                     rumps.MenuItem("Connect live data (browser login)…",
+                                    callback=self.connect_live),
                      self.item_keeper, self.item_widget, self.item_pct,
                      self.item_notify, self.item_anim, None]
 
@@ -150,14 +152,14 @@ class NimbusApp(rumps.App):
             snap = status.get_snapshot()
         now = datetime.now(timezone.utc)
         rate_limited = "429" in snap.detail
-        if snap.source in ("oauth", "api"):
+        if snap.source in ("nimbus", "oauth", "api"):
             self.last_good = (snap, now)
             self.auth_alerted = False
         elif "expired" in snap.detail and not self.auth_alerted and not self.debug:
             self.auth_alerted = True
             notify.send("Live usage data lost — Claude login expired. "
                         "Run `claude` in a terminal to reconnect.")
-        if snap.source not in ("oauth", "api") and self.last_good is not None:
+        if snap.source not in ("nimbus", "oauth", "api") and self.last_good is not None:
             # transient API failure: keep last live numbers, honestly labeled
             good, ts = self.last_good
             age = (now - ts).total_seconds()
@@ -275,6 +277,20 @@ class NimbusApp(rumps.App):
             settings["keeper_enabled"] = False
         config.save_settings(settings)
         item.state = settings["keeper_enabled"]
+
+    def connect_live(self, _):
+        import threading
+
+        from . import login
+
+        def flow():
+            ok = login.login()
+            notify.send("Nimbus connected — live data flowing" if ok
+                        else "Login didn't complete — try again from the menu")
+            if ok:
+                self.refresh()
+
+        threading.Thread(target=flow, daemon=True).start()
 
     def _show_widget(self):
         if self.widget is None:
