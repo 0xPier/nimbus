@@ -287,8 +287,8 @@ class NimbusApp(rumps.App):
         webbrowser.open(url)
         window = rumps.Window(
             title="Connect Nimbus",
-            message="Approve in the browser (read-only usage scope), then paste "
-                    "the code the page shows you:",
+            message="Approve in the browser, then paste the code the page "
+                    "shows you. (Nimbus only ever reads usage numbers.)",
             default_text="", ok="Connect", cancel="Cancel", dimensions=(320, 24))
         resp = window.run()
         if resp.clicked != 1 or not resp.text.strip():

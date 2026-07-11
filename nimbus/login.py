@@ -27,7 +27,11 @@ AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
 TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
 REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback"
 CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"  # public PKCE client
-SCOPE = "user:profile"  # read-only usage
+# The authorize server only accepts this client's canonical scope set —
+# narrower requests (just user:profile) get "Invalid request format"
+# (observed 2026-07-11; see FACTS.md). Nimbus still only ever GETs /usage:
+# the broad scopes exist on the token, not in our code paths (G2).
+SCOPE = "org:create_api_key user:profile user:inference"
 
 KEYCHAIN_SERVICE = "Nimbus"
 KEYCHAIN_ACCOUNT = "oauth"
