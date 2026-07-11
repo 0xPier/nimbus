@@ -78,6 +78,7 @@ class NimbusApp(rumps.App):
         self.subtitle = ""
         self.widget: CloudWidget | None = None
         self.last_good: tuple[Snapshot, datetime] | None = None
+        self.auth_alerted = False  # one notification per live-data loss
 
         settings = config.load_settings()
         self.item_5h = rumps.MenuItem("5-hour: …")
@@ -151,7 +152,12 @@ class NimbusApp(rumps.App):
         rate_limited = "429" in snap.detail
         if snap.source in ("oauth", "api"):
             self.last_good = (snap, now)
-        elif self.last_good is not None:
+            self.auth_alerted = False
+        elif "expired" in snap.detail and not self.auth_alerted and not self.debug:
+            self.auth_alerted = True
+            notify.send("Live usage data lost — Claude login expired. "
+                        "Run `claude` in a terminal to reconnect.")
+        if snap.source not in ("oauth", "api") and self.last_good is not None:
             # transient API failure: keep last live numbers, honestly labeled
             good, ts = self.last_good
             age = (now - ts).total_seconds()
@@ -242,12 +248,16 @@ class NimbusApp(rumps.App):
         if keeper.ping():
             self.refresh()  # confirm the new window started
         elif self.keeper_pings_this_reset == 1:
-            self.retry_timer = rumps.Timer(self._retry_once, keeper.RETRY_DELAY)
+            # rumps timers fire immediately on start, so gate on wall clock
+            self._retry_at = datetime.now(timezone.utc) + timedelta(seconds=keeper.RETRY_DELAY)
+            self.retry_timer = rumps.Timer(self._retry_once, 30)
             self.retry_timer.start()
         else:
             notify.send("Keeper ping failed twice — giving up until next reset")
 
     def _retry_once(self, timer):
+        if datetime.now(timezone.utc) < self._retry_at:
+            return  # not due yet — keep ticking
         timer.stop()
         self.keeper_ping()
 
