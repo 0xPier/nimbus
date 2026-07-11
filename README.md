@@ -35,13 +35,18 @@ delete the Keychain item.
 
 ## Data sources (in order)
 
-1. **Claude Code OAuth token** (read-only) — reuses your existing `claude` CLI
-   login from the Keychain. No setup needed.
-2. **claude.ai session key** — optional: `python -m nimbus.status --set-key`
+1. **Nimbus's own login** (recommended) — menu → *Connect live data (browser
+   login)*, or `python -m nimbus.login`. One-time browser approval with a
+   read-only scope; Nimbus keeps and refreshes its own token in its own
+   Keychain item. Survives indefinitely.
+2. **Claude Code OAuth token** (read-only) — reuses your existing `claude` CLI
+   login. Zero setup, but the CLI's token expires roughly daily unless you
+   use it often.
+3. **claude.ai session key** — optional: `python -m nimbus.status --set-key`
    (stored only in the macOS Keychain).
-3. **Local Claude Code logs** (`~/.claude/projects/`) — zero-network fallback;
+4. **Local Claude Code logs** (`~/.claude/projects/`) — zero-network fallback;
    knows the window timing but shows utilization as honestly *unknown*.
-4. Nothing available → the cloud shows a red slash. Nimbus never guesses.
+5. Nothing available → the cloud shows a red slash. Nimbus never guesses.
 
 Check from a terminal any time: `.venv/bin/python -m nimbus.status`
 
