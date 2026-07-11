@@ -28,7 +28,8 @@ cat > "$PLIST" <<EOF
   </array>
   <key>WorkingDirectory</key><string>$NIMBUS_DIR</string>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <key>KeepAlive</key>
+  <dict><key>SuccessfulExit</key><false/></dict>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>$HOME/.claude/local:$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string></dict>
 </dict>
